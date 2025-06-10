@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Unity WebGL Player</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="scripts/dapp_portal_sdk.js"></script>
     <style>
         body {
@@ -53,157 +54,171 @@
     </div>
     <script src="Build/minidapp.loader.js"></script>
     <script>
-     var sdk = null;
-     var connectedAddress = null;
-     var myGameInstance = null;
+        var sdk = null;
+        var connectedAddress = null;
+        var myGameInstance = null;
 
-     var Module = {
-       onRuntimeInitialized: function() {
-         console.log("Runtime initialized");
-       },
-       env: {
-         MintToken: function(amount) {
-           window.MintToken(amount);
-         },
-         GetBalance: function() {
-           window.GetBalance();
-         },
-         ConnectWallet: function() {
-           window.ConnectWallet();
-         },
-         DisconnectWallet: function() {
-          window.DisconnectWallet();
-         },
-         GetConnectedAddress: function() {
-           var address = window.GetConnectedAddress();
-           var bufferSize = lengthBytesUTF8(address) + 1;
-           var buffer = _malloc(bufferSize);
-           stringToUTF8(address, buffer, bufferSize);
-           return buffer;
-         }
-       }
-     };
+        var Module = {
+            onRuntimeInitialized: function () {
+                console.log("Runtime initialized");
+            },
+            env: {
+                MintToken: function (amount) {
+                    window.MintToken(amount);
+                },
+                GetBalance: function () {
+                    window.GetBalance();
+                },
+                ConnectWallet: function () {
+                    window.ConnectWallet();
+                },
+                DisconnectWallet: function () {
+                    window.DisconnectWallet();
+                },
+                GetConnectedAddress: function () {
+                    var address = window.GetConnectedAddress();
+                    var bufferSize = lengthBytesUTF8(address) + 1;
+                    var buffer = _malloc(bufferSize);
+                    stringToUTF8(address, buffer, bufferSize);
+                    return buffer;
+                }
+            }
+        };
 
-     async function initializeSDK() {
-       try {
-         sdk = await DappPortalSDK.init({
-           clientId: 'PASTE CLIENT ID',
-           chainId: '1001'
-         });
-         console.log("SDK initialized");
-         return true;
-       } catch (error) {
-         console.error("SDK init error:", error);
-         return false;
-       }
-     }
+        async function initializeSDK() {
+            try {
+                await liff.init({
+                    liffId: "2007553567-YDk2Z7gK" // Replace with your LIFF ID
+                });
 
-     window.ConnectWallet = async function() {
-       try {
-         if (!sdk) {
-           const initialized = await initializeSDK();
-           if (!initialized) return null;
-         }
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                }
 
-         const provider = sdk.getWalletProvider();
-         const accounts = await provider.request({ method: 'kaia_requestAccounts' });
+                sdk = await DappPortalSDK.init({
+                    clientId: '8d61cfbc-6eed-47ef-bd7e-a5b1ce612544', // Replace with your CLIENT ID
+                    chainId: '1001'
+                });
 
-         if (accounts && accounts.length > 0) {
-           connectedAddress = accounts[0];
-           myGameInstance.SendMessage('Web3Manager', 'OnWalletConnected', connectedAddress);
-         }
-       } catch (error) {
-         myGameInstance.SendMessage('Web3Manager', 'OnWalletError', error.message);
-       }
-     }
+                console.log("SDKs initialized");
+                return true;
+            } catch (error) {
+                console.error("SDK init error:", error);
+                return false;
+            }
+        }
 
-     window.DisconnectWallet = async function() {
-       try {
-         if (!sdk) {
-           console.error("SDK not initialized");
-           return;
-         }
+        window.ConnectWallet = async function () {
+            try {
+                if (!sdk) {
+                    const initialized = await initializeSDK();
+                    if (!initialized) return null;
+                }
 
-         const provider = sdk.getWalletProvider();
-         await provider.disconnect();
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
 
-         // Reset connected address
-         connectedAddress = null;
-         myGameInstance.SendMessage('Web3Manager', 'OnWalletDisconnected');
-         console.log("Wallet disconnected successfully");
-       } catch (error) {
-         console.error("Disconnect error:", error);
-         myGameInstance.SendMessage('Web3Manager', 'OnWalletError', "Disconnect failed: " + error.message);
-       }
-     }
+                const provider = sdk.getWalletProvider();
+                const accounts = await provider.request({ method: 'kaia_requestAccounts' });
 
-     window.GetConnectedAddress = function() {
-       return connectedAddress || '';
-     }
+                if (accounts && accounts.length > 0) {
+                    connectedAddress = accounts[0];
+                    myGameInstance.SendMessage('Web3Manager', 'OnWalletConnected', connectedAddress);
+                }
+            } catch (error) {
+                myGameInstance.SendMessage('Web3Manager', 'OnWalletError', error.message);
+            }
+        }
 
-     window.MintToken = async function(amount) {
-       try {
-         const provider = sdk.getWalletProvider();
+        window.DisconnectWallet = async function () {
+            try {
+                if (liff.isLoggedIn()) {
+                    await liff.logout();
+                }
 
-         const mintSignature = '0xa0712d68';
-         const amountHex = amount.toString(16).padStart(64, '0');
-         const data = mintSignature + amountHex;
+                const provider = sdk.getWalletProvider();
+                await provider.disconnect();
 
-         const tx = {
-           from: connectedAddress,
-           to: '0x099D7feC4f799d1749adA8815eB21375E13E0Ddb',
-           value: '0x0',
-           data: data,
-           gas: '0x4C4B40'
-         };
+                // Reset connected address
+                connectedAddress = null;
+                myGameInstance.SendMessage('Web3Manager', 'OnWalletDisconnected');
+                console.log("Wallet disconnected successfully");
 
-         const txHash = await provider.request({
-           method: 'kaia_sendTransaction',
-           params: [tx]
-         });
+            } catch (error) {
+                console.error("Disconnect error:", error);
+                myGameInstance.SendMessage('Web3Manager', 'OnWalletError', "Disconnect failed: " + error.message);
+            }
+        }
 
-         myGameInstance.SendMessage('Web3Manager', 'OnMintSuccess', txHash);
-         GetBalance(); // Get updated balance after mint
-       } catch (error) {
-         myGameInstance.SendMessage('Web3Manager', 'OnMintError', error.message);
-       }
-     }
+        window.GetConnectedAddress = function () {
+            return connectedAddress || '';
+        }
 
-     window.GetBalance = async function() {
-       try {
-         const provider = sdk.getWalletProvider();
+        window.MintToken = async function (amount) {
+            try {
+                const provider = sdk.getWalletProvider();
 
-         const balanceSignature = '0x70a08231';
-         const addressParam = connectedAddress.substring(2).padStart(64, '0');
-         const data = balanceSignature + addressParam;
+                const mintSignature = '0xa0712d68';
+                const amountHex = amount.toString(16).padStart(64, '0');
+                const data = mintSignature + amountHex;
 
-         const result = await provider.request({
-           method: 'kaia_call',
-           params: [{
-             from: connectedAddress,
-             to: '0x099D7feC4f799d1749adA8815eB21375E13E0Ddb',
-             data: data
-           }, 'latest']
-         });
+                const tx = {
+                    from: connectedAddress,
+                    to: '0x099D7feC4f799d1749adA8815eB21375E13E0Ddb',
+                    value: '0x0',
+                    data: data,
+                    gas: '0x4C4B40'
+                };
 
-         const balance = parseInt(result, 16);
-         myGameInstance.SendMessage('Web3Manager', 'OnBalanceReceived', balance.toString());
-       } catch (error) {
-         myGameInstance.SendMessage('Web3Manager', 'OnBalanceError', error.message);
-       }
-     }
+                const txHash = await provider.request({
+                    method: 'kaia_sendTransaction',
+                    params: [tx]
+                });
 
-     createUnityInstance(document.querySelector("#unity-canvas"), {
-       dataUrl: "Build/minidapp.data",
-       frameworkUrl: "Build/minidapp.framework.js",
-       codeUrl: "Build/minidapp.wasm",
-       streamingAssetsUrl: "StreamingAssets",
-       companyName: "DefaultCompany",
-       productName: "minidapp",
-       productVersion: "0.1",
-     }).then((unityInstance) => {
-       myGameInstance = unityInstance;
-     });
+                myGameInstance.SendMessage('Web3Manager', 'OnMintSuccess', txHash);
+                GetBalance();
+            } catch (error) {
+                myGameInstance.SendMessage('Web3Manager', 'OnMintError', error.message);
+            }
+        }
+
+        window.GetBalance = async function () {
+            try {
+                const provider = sdk.getWalletProvider();
+
+                const balanceSignature = '0x70a08231';
+                const addressParam = connectedAddress.substring(2).padStart(64, '0');
+                const data = balanceSignature + addressParam;
+
+                const result = await provider.request({
+                    method: 'kaia_call',
+                    params: [{
+                        from: connectedAddress,
+                        to: '0x099D7feC4f799d1749adA8815eB21375E13E0Ddb',
+                        data: data
+                    }, 'latest']
+                });
+
+                const balance = parseInt(result, 16);
+                myGameInstance.SendMessage('Web3Manager', 'OnBalanceReceived', balance.toString());
+            } catch (error) {
+                myGameInstance.SendMessage('Web3Manager', 'OnBalanceError', error.message);
+            }
+        }
+
+        createUnityInstance(document.querySelector("#unity-canvas"), {
+            dataUrl: "Build/minidapp.data",
+            frameworkUrl: "Build/minidapp.framework.js",
+            codeUrl: "Build/minidapp.wasm",
+            streamingAssetsUrl: "StreamingAssets",
+            companyName: "DefaultCompany",
+            productName: "minidapp",
+            productVersion: "0.1",
+        }).then((unityInstance) => {
+            myGameInstance = unityInstance;
+        });
     </script>
 </body>
 </html>
