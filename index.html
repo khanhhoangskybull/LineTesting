@@ -1,224 +1,131 @@
 <!DOCTYPE html>
 <html lang="en-us">
-<head>
+  <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unity WebGL Player</title>
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script src="scripts/dapp_portal_sdk.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-        }
-
-        #unity-container {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-        }
-
-        #unity-canvas {
-            width: 100%;
-            height: 100%;
-            background: #231F20;
-        }
-
-        #unity-loading-bar {
-            display: none;
-        }
-
-        #unity-progress-bar-empty {
-            width: 141px;
-            height: 18px;
-            margin-top: 10px;
-            background: url('Build/minidapp.progress-bar-empty-dark.png') no-repeat center;
-        }
-
-        #unity-progress-bar-full {
-            width: 0%;
-            height: 18px;
-            margin-top: 10px;
-            background: url('Build/minidapp.progress-bar-full-dark.png') no-repeat center;
-        }
-    </style>
-</head>
-<body>
-    <div id="unity-container">
-        <canvas id="unity-canvas"></canvas>
-        <div id="unity-loading-bar">
-            <div id="unity-progress-bar-empty">
-                <div id="unity-progress-bar-full"></div>
-            </div>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Unity WebGL Player | DiscordxUnity</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+  </head>
+  <body>
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
         </div>
+      </div>
+      <div id="unity-warning"> </div>
+      <div id="unity-footer">
+        <div id="unity-webgl-logo"></div>
+        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">DiscordxUnity</div>
+      </div>
     </div>
-    <script src="Build/minidapp.loader.js"></script>
     <script>
-        var sdk = null;
-        var connectedAddress = null;
-        var myGameInstance = null;
 
-        var Module = {
-            onRuntimeInitialized: function () {
-                console.log("Runtime initialized");
-            },
-            env: {
-                MintToken: function (amount) {
-                    window.MintToken(amount);
-                },
-                GetBalance: function () {
-                    window.GetBalance();
-                },
-                ConnectWallet: function () {
-                    window.ConnectWallet();
-                },
-                DisconnectWallet: function () {
-                    window.DisconnectWallet();
-                },
-                GetConnectedAddress: function () {
-                    var address = window.GetConnectedAddress();
-                    var bufferSize = lengthBytesUTF8(address) + 1;
-                    var buffer = _malloc(bufferSize);
-                    stringToUTF8(address, buffer, bufferSize);
-                    return buffer;
-                }
-            }
-        };
+      var container = document.querySelector("#unity-container");
+      var canvas = document.querySelector("#unity-canvas");
+      var loadingBar = document.querySelector("#unity-loading-bar");
+      var progressBarFull = document.querySelector("#unity-progress-bar-full");
+      var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+      var warningBanner = document.querySelector("#unity-warning");
 
-        async function initializeSDK() {
-            try {
-                await liff.init({
-                    liffId: "2007553567-YDk2Z7gK" // Replace with your LIFF ID
-                });
-
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                }
-
-                sdk = await DappPortalSDK.init({
-                    clientId: '8d61cfbc-6eed-47ef-bd7e-a5b1ce612544', // Replace with your CLIENT ID
-                    chainId: '1001'
-                });
-
-                console.log("SDKs initialized");
-                return true;
-            } catch (error) {
-                console.error("SDK init error:", error);
-                return false;
-            }
+      // Shows a temporary message banner/ribbon for a few seconds, or
+      // a permanent error message on top of the canvas if type=='error'.
+      // If type=='warning', a yellow highlight color is used.
+      // Modify or remove this function to customize the visually presented
+      // way that non-critical warnings and error messages are presented to the
+      // user.
+      function unityShowBanner(msg, type) {
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
         }
-
-        window.ConnectWallet = async function () {
-            try {
-                if (!sdk) {
-                    const initialized = await initializeSDK();
-                    if (!initialized) return null;
-                }
-
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return;
-                }
-
-                const provider = sdk.getWalletProvider();
-                const accounts = await provider.request({ method: 'kaia_requestAccounts' });
-
-                if (accounts && accounts.length > 0) {
-                    connectedAddress = accounts[0];
-                    myGameInstance.SendMessage('Web3Manager', 'OnWalletConnected', connectedAddress);
-                }
-            } catch (error) {
-                myGameInstance.SendMessage('Web3Manager', 'OnWalletError', error.message);
-            }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == 'error') div.style = 'background: red; padding: 10px;';
+        else {
+          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+          setTimeout(function() {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
         }
+        updateBannerVisibility();
+      }
 
-        window.DisconnectWallet = async function () {
-            try {
-                if (liff.isLoggedIn()) {
-                    await liff.logout();
-                }
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/Build.loader.js";
+      var config = {
+        dataUrl: buildUrl + "/Build.data.br",
+        frameworkUrl: buildUrl + "/Build.framework.js.br",
+        codeUrl: buildUrl + "/Build.wasm.br",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "Discord",
+        productName: "DiscordxUnity",
+        productVersion: "1.0",
+        showBanner: unityShowBanner,
+      };
 
-                const provider = sdk.getWalletProvider();
-                await provider.disconnect();
+      // By default, Unity keeps WebGL canvas render target size matched with
+      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+      // Set this to false if you want to decouple this synchronization from
+      // happening inside the engine, and you would instead like to size up
+      // the canvas DOM size and WebGL render target sizes yourself.
+      // config.matchWebGLToCanvasSize = false;
 
-                // Reset connected address
-                connectedAddress = null;
-                myGameInstance.SendMessage('Web3Manager', 'OnWalletDisconnected');
-                console.log("Wallet disconnected successfully");
+      // If you would like all file writes inside Unity Application.persistentDataPath
+      // directory to automatically persist so that the contents are remembered when
+      // the user revisits the site the next time, uncomment the following line:
+      // config.autoSyncPersistentDataPath = true;
+      // This autosyncing is currently not the default behavior to avoid regressing
+      // existing user projects that might rely on the earlier manual
+      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
+      // expected to change.
 
-            } catch (error) {
-                console.error("Disconnect error:", error);
-                myGameInstance.SendMessage('Web3Manager', 'OnWalletError', "Disconnect failed: " + error.message);
-            }
-        }
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        // Mobile device style: fill the whole browser client area with the game canvas:
 
-        window.GetConnectedAddress = function () {
-            return connectedAddress || '';
-        }
+        var meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+        container.className = "unity-mobile";
+        canvas.className = "unity-mobile";
 
-        window.MintToken = async function (amount) {
-            try {
-                const provider = sdk.getWalletProvider();
+        // To lower canvas resolution on mobile devices to gain some
+        // performance, uncomment the following line:
+        // config.devicePixelRatio = 1;
 
-                const mintSignature = '0xa0712d68';
-                const amountHex = amount.toString(16).padStart(64, '0');
-                const data = mintSignature + amountHex;
 
-                const tx = {
-                    from: connectedAddress,
-                    to: '0x099D7feC4f799d1749adA8815eB21375E13E0Ddb',
-                    value: '0x0',
-                    data: data,
-                    gas: '0x4C4B40'
+      } else {
+        // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
+
+        canvas.style.width = "960px";
+        canvas.style.height = "600px";
+      }
+
+      loadingBar.style.display = "block";
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          progressBarFull.style.width = 100 * progress + "%";
+              }).then((unityInstance) => {
+                loadingBar.style.display = "none";
+                fullscreenButton.onclick = () => {
+                  unityInstance.SetFullscreen(1);
                 };
+              }).catch((message) => {
+                alert(message);
+              });
+            };
 
-                const txHash = await provider.request({
-                    method: 'kaia_sendTransaction',
-                    params: [tx]
-                });
+      document.body.appendChild(script);
 
-                myGameInstance.SendMessage('Web3Manager', 'OnMintSuccess', txHash);
-                GetBalance();
-            } catch (error) {
-                myGameInstance.SendMessage('Web3Manager', 'OnMintError', error.message);
-            }
-        }
-
-        window.GetBalance = async function () {
-            try {
-                const provider = sdk.getWalletProvider();
-
-                const balanceSignature = '0x70a08231';
-                const addressParam = connectedAddress.substring(2).padStart(64, '0');
-                const data = balanceSignature + addressParam;
-
-                const result = await provider.request({
-                    method: 'kaia_call',
-                    params: [{
-                        from: connectedAddress,
-                        to: '0x099D7feC4f799d1749adA8815eB21375E13E0Ddb',
-                        data: data
-                    }, 'latest']
-                });
-
-                const balance = parseInt(result, 16);
-                myGameInstance.SendMessage('Web3Manager', 'OnBalanceReceived', balance.toString());
-            } catch (error) {
-                myGameInstance.SendMessage('Web3Manager', 'OnBalanceError', error.message);
-            }
-        }
-
-        createUnityInstance(document.querySelector("#unity-canvas"), {
-            dataUrl: "Build/minidapp.data",
-            frameworkUrl: "Build/minidapp.framework.js",
-            codeUrl: "Build/minidapp.wasm",
-            streamingAssetsUrl: "StreamingAssets",
-            companyName: "DefaultCompany",
-            productName: "minidapp",
-            productVersion: "0.1",
-        }).then((unityInstance) => {
-            myGameInstance = unityInstance;
-        });
     </script>
-</body>
+  </body>
 </html>
